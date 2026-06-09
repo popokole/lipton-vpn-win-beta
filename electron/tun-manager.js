@@ -46,19 +46,39 @@ function cmd(c) {
   catch (e) { console.warn('[TUN] cmd failed:', e.message, '|', c) }
 }
 
-function waitForInterface(timeout = 12000) {
+function waitForInterface(proc, timeout = 12000) {
   return new Promise((resolve, reject) => {
+    let done = false
+
+    const fail = (msg) => {
+      if (done) return
+      done = true
+      proc.removeListener('exit', onExit)
+      reject(new Error(msg))
+    }
+
+    const ok = () => {
+      if (done) return
+      done = true
+      proc.removeListener('exit', onExit)
+      resolve()
+    }
+
+    const onExit = (code) => fail(`tun2socks завершился (код ${code}) — возможно, wintun.dll не найден`)
+    proc.once('exit', onExit)
+
     const start = Date.now()
     function check() {
+      if (done) return
       try {
         const out = execSync(
           `powershell -NoProfile -NonInteractive -Command "Get-NetAdapter -Name '${TUN_NAME}' -ErrorAction SilentlyContinue | Measure-Object | Select-Object -ExpandProperty Count"`,
           { encoding: 'utf8', timeout: 4000, windowsHide: true }
         ).trim()
-        if (parseInt(out) > 0) { resolve(); return }
+        if (parseInt(out) > 0) { ok(); return }
       } catch {}
       if (Date.now() - start > timeout) {
-        reject(new Error(`TUN интерфейс не появился (${timeout}мс)`))
+        fail(`TUN интерфейс не появился (${timeout}мс)`)
         return
       }
       setTimeout(check, 700)
@@ -95,7 +115,7 @@ async function start(serverAddress, socksPort = 10808) {
   tun2socksProc.on('exit', code => { console.log(`[TUN] tun2socks завершён, код ${code}`); tun2socksProc = null })
   tun2socksProc.on('error', e => console.error('[TUN] Ошибка tun2socks:', e.message))
 
-  await waitForInterface()
+  await waitForInterface(tun2socksProc)
   console.log('[TUN] Интерфейс появился, назначаем IP...')
 
   cmd(`netsh interface ip set address name="${TUN_NAME}" static ${TUN_IP} ${TUN_MASK}`)
