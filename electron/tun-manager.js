@@ -23,12 +23,21 @@ function findTun2socks() {
 }
 
 function getDefaultGateway() {
-  const out = execSync(
-    `powershell -NoProfile -NonInteractive -Command "Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 1 -ExpandProperty NextHop"`,
-    { encoding: 'utf8', timeout: 8000, windowsHide: true }
-  ).trim()
-  if (!out || out === '0.0.0.0') throw new Error('Не удалось определить шлюз по умолчанию')
-  return out
+  // route print is instant (no PowerShell startup cost)
+  try {
+    const out = execSync('route print 0.0.0.0', { encoding: 'utf8', timeout: 3000, windowsHide: true })
+    const match = out.match(/\s+0\.0\.0\.0\s+0\.0\.0\.0\s+(\d+\.\d+\.\d+\.\d+)/)
+    if (match && match[1] !== '0.0.0.0') return match[1]
+  } catch {}
+  // fallback: PowerShell
+  try {
+    const out = execSync(
+      `powershell -NoProfile -NonInteractive -Command "Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 1 -ExpandProperty NextHop"`,
+      { encoding: 'utf8', timeout: 8000, windowsHide: true }
+    ).trim()
+    if (out && out !== '0.0.0.0') return out
+  } catch {}
+  throw new Error('Не удалось определить шлюз по умолчанию')
 }
 
 async function resolveIp(hostname) {
