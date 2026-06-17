@@ -110,7 +110,7 @@ async function start(serverAddress, socksPort = 10808) {
   cmd(`route add ${savedServerIp} mask 255.255.255.255 ${gateway} metric 1`)
 
   tun2socksProc = spawn(tunPath, [
-    '-device', `wintun://${TUN_NAME}`,
+    '-device', `tun://${TUN_NAME}`,
     '-proxy',  `socks5://127.0.0.1:${socksPort}`,
     '-loglevel', 'warning',
   ], {
